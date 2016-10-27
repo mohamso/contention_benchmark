@@ -1,5 +1,6 @@
 /* Author: Mohammed Sourouri <mohammed.sourouri@ntnu.no>
    Date: October 19, 2016
+   Updated: October 27, 2016
    Comment: A thread contention benchmark where the master thread conducts MPI communication
    and the other threads are busy running the STREAM Triad benchmark.
 */
@@ -16,18 +17,6 @@
 #include <omp.h>
 
 typedef double real;
-
-void triad(real* a, const real* b, const real* c, const real scalar,
-           const size_t stream_array_size, const int max_threads) {
-
-  #pragma omp parallel default(shared) num_threads(max_threads-1)
-  {
-    #pragma omp for
-    for (int i = 0; i < stream_array_size; i++) {
-      a[i] = b[i] + scalar * c[i];
-    }
-  }
-}
 
 int main(int argc, char** argv) {
 
@@ -146,7 +135,13 @@ int main(int argc, char** argv) {
 
         stream_timer -= omp_get_wtime();
 
-        triad(a, b, c, scalar, stream_array_size, max_threads);
+        #pragma omp parallel num_threads(max_threads-1)
+        {
+          #pragma omp for
+          for (int i = 0; i < stream_array_size; i++) {
+            a[i] = b[i] + scalar * c[i];
+          }
+        }
 
         stream_timer += omp_get_wtime();
 
@@ -166,16 +161,16 @@ int main(int argc, char** argv) {
       sum_time += time;
     }
 
-    double sizes = 3 * sizeof(real) * stream_array_size;
+    double data_size = 3 * sizeof(real) * stream_array_size;
 
-    double stream_bandwidth = (3. * sizeof(real) * stream_array_size) / (min_time * 1024. * 1024. * 1024.);
+    double stream_bandwidth = 1.0e-06 * data_size / min_time;
 
     std::cout << "\n";
     std::cout << "================================ STREAM ==================================\n";
     std::cout << "Kernel      Best Rate (MB/s)    Avg time        Min time        Max time\n";
     std::cout << "Triad         " << std::setw(11) << std::setprecision(6)
-              << 1.0e-06 * (3 * sizeof(real) * stream_array_size) / min_time << "       "
-              << sum_time / (num_stream_repetitions - 1) << "        " << min_time << "        " << max_time << std::endl;
+              << stream_bandwidth << "       " << sum_time / (num_stream_repetitions - 1) << "        "
+              << min_time << "        " << max_time << std::endl;
     std::cout << "\n";
   }
 
